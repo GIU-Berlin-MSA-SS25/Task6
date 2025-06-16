@@ -1,0 +1,88 @@
+name: Autograding Tests
+'on':
+- push
+- repository_dispatch
+permissions:
+  checks: write
+  actions: read
+  contents: read
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Start Minikube
+      id: start-minikube
+      run: minikube start
+    - name: Namespace
+      id: namespace
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: Namespace
+        setup-command: kubectl create -f k8s/namespace.yaml
+        command: kubectl get namespaces
+        input: ''
+        expected-output: 'task-6-namespace\s*Active'
+        comparison-method: regex
+        timeout: 10
+        max-score: 2
+    - name: Deployment
+      id: deployment
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: Deployment
+        setup-command: kubectl apply -f k8s/deployment.yaml && sleep 60
+        command: kubectl get deployment -n=task-6-namespace
+        input: ''
+        expected-output: 'task-6-deployment\s*4\/4'
+        comparison-method: regex
+        timeout: 10
+        max-score: 2
+    - name: Pods
+      id: pods
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: Pods
+        setup-command: ''
+        command: kubectl get pods -n=task-6-namespace
+        input: ''
+        expected-output: task-6-deployment-[0-9a-f]{10}-[bcdfghjklmnpqrstvwxz2456789]{5}\s*1\/1\s*Running
+        comparison-method: regex
+        timeout: 10
+        max-score: 2
+    - name: Service
+      id: service
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: Service
+        setup-command: kubectl apply -f k8s/service.yaml && sleep 30
+        command: kubectl get services -n=task-6-namespace
+        input: ''
+        expected-output: 'task-6-service\s*NodePort\s*\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*<none>\s*80:'
+        comparison-method: regex
+        timeout: 10
+        max-score: 2
+    - name: URL
+      id: url
+      uses: classroom-resources/autograding-io-grader@v1
+      with:
+        test-name: URL
+        setup-command: ''
+        command: curl $(minikube service task-6-service --url -n=task-6-namespace)/hello
+        input: ''
+        expected-output: Hello World!
+        comparison-method: regex
+        timeout: 10
+        max-score: 2
+    - name: Autograding Reporter
+      uses: classroom-resources/autograding-grading-reporter@v1
+      env:
+        NAMESPACE_RESULTS: "${{steps.namespace.outputs.result}}"
+        DEPLOYMENT_RESULTS: "${{steps.deployment.outputs.result}}"
+        PODS_RESULTS: "${{steps.pods.outputs.result}}"
+        SERVICE_RESULTS: "${{steps.service.outputs.result}}"
+        URL_RESULTS: "${{steps.url.outputs.result}}"
+      with:
+        runners: namespace,deployment,pods,service,url
